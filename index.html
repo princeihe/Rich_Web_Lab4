@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rich Web Lab 4</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Rich Web Lab 4</h1>
+        <p>Choose one of the three methods below to fetch and display student data:</p>
+    </header>
+
+    <section class="controls">
+        <button class="btn sync-btn" id="sync-btn">Sync XMLHttpRequest</button>
+        <button class="btn async-btn" id="async-btn">Async XMLHttpRequest</button>
+        <button class="btn promise-btn" id="promise-btn">Fetch API with Promises</button>
+    </section>
+
+    <section id="feedback" class="feedback">
+        <!-- Feedback messages appear here -->
+    </section>
+
+    <section>
+        <table id="data-table">
+            <caption>Student Data</caption>
+            <thead>
+                <tr>
+                    <th>First Name</th>
+                    <th>Last Name</th>
+                    <th>ID</th>
+                </tr>
+            </thead>
+            <tbody id="data-table-body"></tbody>
+        </table>
+    </section>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+    const basePath = 'data/'; 
+    const feedback = document.getElementById('feedback');
+
+    // Display error messages in the case data is not fetched
+    function showFeedback(message, isError = false) {
+        feedback.textContent = message;
+        feedback.style.color = isError ? 'red' : 'black';
+    }
+
+    // Clear table before displaying new data
+    function clearTable() {
+        document.getElementById('data-table-body').innerHTML = '';
+    }
+
+    // Display data in table
+    function updateTable(studentData) {
+        const tableBody = document.getElementById('data-table-body');
+        studentData.forEach(student => {
+            const [firstName, lastName] = student.name.split(' ');
+            const row = `<tr>
+                            <td>${firstName}</td>
+                            <td>${lastName}</td>
+                            <td>${student.id}</td>
+                         </tr>`;
+            tableBody.insertAdjacentHTML('beforeend', row);
+        });
+    }
+
+    // Synchronous XMLHttpRequest
+    function fetchDataSync() {
+        showFeedback('Fetching data synchronously...');
+        clearTable();
+
+        try {
+            const xhr = new XMLHttpRequest();
+            
+            // Fetch reference.json
+            xhr.open('GET', `${basePath}reference.json`, false);
+            xhr.send();
+            const referenceData = JSON.parse(xhr.responseText);
+            
+            // Fetch data1.json based on reference.json
+            xhr.open('GET', `${basePath}${referenceData.data_location}`, false);
+            xhr.send();
+            const data1 = JSON.parse(xhr.responseText);
+            
+            // Fetch data2.json based on data1's data_location
+            xhr.open('GET', `${basePath}${data1.data_location}`, false);
+            xhr.send();
+            const data2 = JSON.parse(xhr.responseText);
+            
+            // Fetch data3.json
+            xhr.open('GET', `${basePath}data3.json`, false);
+            xhr.send();
+            const data3 = JSON.parse(xhr.responseText);
+            
+            // Combine and display all data
+            const allData = [...data1.data, ...data2.data, ...data3.data];
+            updateTable(allData);
+            showFeedback('Data fetched and displayed successfully.');
+        } catch (error) {
+            showFeedback('Error fetching data synchronously.', true);
+        }
+    }
+
+    // Asynchronous XMLHttpRequest
+    function fetchDataAsync() {
+        showFeedback('Fetching data asynchronously...');
+        clearTable();
+
+        const xhr = new XMLHttpRequest();
+        
+        // Fetching reference.json
+        xhr.open('GET', `${basePath}reference.json`, true);
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                const referenceData = JSON.parse(xhr.responseText);
+                fetchData1(referenceData.data_location);
+            } else {
+                showFeedback('Failed to fetch reference.json', true);
+            }
+        };
+        xhr.send();
+
+        // Fetching data1.json then data2.json
+        function fetchData1(dataLocation) {
+            const xhr1 = new XMLHttpRequest();
+            xhr1.open('GET', `${basePath}${dataLocation}`, true);
+            xhr1.onload = function() {
+                if (xhr1.status === 200) {
+                    const data1 = JSON.parse(xhr1.responseText);
+                    fetchData2(data1.data_location, data1);
+                } else {
+                    showFeedback('Failed to fetch data1.json', true);
+                }
+            };
+            xhr1.send();
+        }
+
+        // Fetch data2.json then data3.json
+        function fetchData2(dataLocation, data1) {
+            const xhr2 = new XMLHttpRequest();
+            xhr2.open('GET', `${basePath}${dataLocation}`, true);
+            xhr2.onload = function() {
+                if (xhr2.status === 200) {
+                    const data2 = JSON.parse(xhr2.responseText);
+                    fetchData3(data1, data2);
+                } else {
+                    showFeedback('Failed to fetch data2.json', true);
+                }
+            };
+            xhr2.send();
+        }
+
+        // Fetch data3.json then display everything
+        function fetchData3(data1, data2) {
+            const xhr3 = new XMLHttpRequest();
+            xhr3.open('GET', `${basePath}data3.json`, true);
+            xhr3.onload = function() {
+                if (xhr3.status === 200) {
+                    const data3 = JSON.parse(xhr3.responseText);
+                    const allData = [...data1.data, ...data2.data, ...data3.data];
+                    updateTable(allData);
+                    showFeedback('Data fetched and displayed successfully.');
+                } else {
+                    showFeedback('Failed to fetch data3.json', true);
+                }
+            };
+            xhr3.send();
+        }
+    }
+
+    // Fetch API with Promises
+    function fetchDataWithPromises() {
+        showFeedback('Fetching data with Promises...');
+        clearTable();
+
+        fetch(`${basePath}reference.json`)
+            .then(response => {
+                if (!response.ok) throw new Error('Error fetching reference.json');
+                return response.json();
+            })
+            .then(reference => fetch(`${basePath}${reference.data_location}`))
+            .then(response => response.json())
+            .then(data1 => fetch(`${basePath}${data1.data_location}`).then(response => response.json().then(data2 => ({ data1, data2 }))))
+            .then(({ data1, data2 }) => fetch(`${basePath}data3.json`).then(response => response.json().then(data3 => ({ data1, data2, data3 }))))
+            .then(({ data1, data2, data3 }) => {
+                const allData = [...data1.data, ...data2.data, ...data3.data];
+                updateTable(allData);
+                showFeedback('Data fetched and displayed successfully.');
+            })
+            .catch(error => showFeedback(`Error: ${error.message}`, true));
+    }
+
+    // Attaching the event listeners to buttons
+    document.getElementById('sync-btn').addEventListener('click', fetchDataSync);
+    document.getElementById('async-btn').addEventListener('click', fetchDataAsync);
+    document.getElementById('promise-btn').addEventListener('click', fetchDataWithPromises);
+});
+
+    </script>
+</body>
+</html>
